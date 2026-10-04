@@ -98,6 +98,16 @@ footer b{color:var(--tx)}
 .pd{display:flex;gap:8px;align-items:center;margin-bottom:8px;margin-top:0;font-size:15px}.pd input{width:auto;margin:0}
 .badge{display:inline-block;background:var(--soft);color:var(--ok);border:1px solid var(--ok);border-radius:99px;padding:2px 12px;font-size:13px;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--dk);color:#fff;padding:10px 18px;border-radius:10px;z-index:9}
+.encBg{position:fixed;inset:0;z-index:20;background:rgba(7,38,44,.6);display:flex;padding:16px;overflow:auto}
+.enc{margin:auto;width:100%;max-width:580px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:16px;padding:28px}
+.enc:focus{outline:none}
+.enc h2{font-size:26px;margin-bottom:4px}
+.enc fieldset{border:0;padding:0;margin:0 0 20px;min-width:0}
+.enc legend{font-weight:500;padding:0;margin-bottom:10px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.encScale{display:flex;flex-wrap:wrap;gap:6px}
+.encScale .chip{flex:1 1 40px;min-width:40px;padding:8px 0;text-align:center}
+.encEnds{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--mut);margin-top:6px}
+.encAct{display:flex;gap:10px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -164,6 +174,7 @@ footer b{color:var(--tx)}
  <div><b>Horarios</b><br>Consulta: lun–sáb 8:00–18:00<br>Urgencias: 24 horas</div>
  <div>Prototipo académico · Certus · Datos simulados</div>
 </footer>
+<div id="enc"></div>
 <div id="tt"></div>
 
 <script>
@@ -190,7 +201,7 @@ const mkCode=()=>'CRP-'+(1000+Math.random()*9000|0);
 // Vistas
 function go(v,anchor){if(v=='portal'&&!S.user)v='login';view=v;['Home','Login','Portal'].forEach(n=>$('#v'+n).classList.toggle('hide',n.toLowerCase()!=v));scrollTo(0,0);if(anchor)setTimeout(()=>document.getElementById(anchor).scrollIntoView(),30);if(v=='portal')R()}
 function pedir(t){if(t){S.sel.tipo=t;S.sel.hora=null;S.stage='form'}S.tab='reserva';go('portal')}
-function login(e){e.preventDefault();const u=$('#u').value.trim().toLowerCase(),p=$('#p').value;if(u=='maria'&&p=='maria'){S.user='María';$('#er').textContent='';$('#p').value='';head();go('portal')}else{$('#er').textContent='Usuario o clave incorrectos';$('#p').value=''}return false}
+function login(e){e.preventDefault();const u=$('#u').value.trim().toLowerCase(),p=$('#p').value;if(u=='maria'&&p=='maria'){S.user='María';$('#er').textContent='';$('#p').value='';head();go('portal');encuesta()}else{$('#er').textContent='Usuario o clave incorrectos';$('#p').value=''}return false}
 function head(){$('#hi').classList.toggle('hide',!S.user);$('#hi').textContent=S.user?'Hola, '+S.user:'';$('#bOut').hidden=!S.user}
 function logout(){S.user=null;head();$('#u').value='';go('login')}
 function reset(){const u=S.user;init();S.user=u;R();toast('Demo reiniciada')}
@@ -249,6 +260,41 @@ function vFic(){const c=S.cita,n=S.canales.length;
  <div class="box"><h3 style="font-size:20px;margin-bottom:10px">Gestión pendiente</h3>${S.pend.map((p,i)=>`<label class="pd"><input type="checkbox" ${p[1]?'checked':''} onchange="S.pend[${i}][1]=this.checked"> ${p[0]}</label>`).join('')}<input id="nt" placeholder="Nota breve" style="margin-top:10px"><button class="btn" onclick="nota()">Registrar nota</button></div></div>
  <div class="box" style="margin-top:16px"><h3 style="font-size:20px;margin-bottom:6px">Últimas interacciones</h3>${S.ints.length?S.ints.map(e=>`<div class="ev"><span class="tag">${e.c}</span>${e.t}<time>${e.h}</time></div>`).join(''):'<p style="color:var(--mut)">Aún no hay interacciones. Agenda o escribe por WhatsApp.</p>'}</div>`}
 function nota(){const v=$('#nt').value.trim();if(!v)return;addInt('Llamada','Nota: '+v);R()}
+// Encuesta de experiencia (CES, NPS, CSAT): sale en cada inicio de sesión
+const PREG=[
+ {k:'ces',n:'CES',t:'¿Qué tan fácil fue tu última gestión con la clínica (cita, trámite o consulta de costos)?',a:1,b:5,lo:'Muy difícil',hi:'Muy fácil'},
+ {k:'nps',n:'NPS',t:'¿Qué tan probable es que recomiendes la Clínica Ricardo Palma a un familiar o amigo?',a:0,b:10,lo:'Nada probable',hi:'Muy probable'},
+ {k:'csat',n:'CSAT',t:'¿Qué tan satisfecho(a) quedaste con la atención que recibiste?',a:1,b:5,lo:'Muy insatisfecho',hi:'Muy satisfecho'}];
+let E={},encPrev=null;
+function encuesta(){
+ E={ces:null,nps:null,csat:null};encPrev=document.activeElement;
+ $('#enc').innerHTML=`<div class="encBg"><div class="enc" id="encBox" role="dialog" aria-modal="true" aria-labelledby="encT" tabindex="-1">
+  <h2 id="encT">Cuéntanos tu experiencia</h2>
+  <p style="color:var(--mut);margin:0 0 20px">Son 3 preguntas y toma menos de un minuto.</p>
+  ${PREG.map(q=>`<fieldset><legend id="lg-${q.k}"><span class="tag">${q.n}</span>${q.t}</legend>
+   <div class="encScale" role="radiogroup" aria-labelledby="lg-${q.k}">${Array.from({length:q.b-q.a+1},(_,i)=>q.a+i).map(v=>`<button type="button" class="chip" role="radio" aria-checked="false" data-k="${q.k}" data-v="${v}" onclick="encSet('${q.k}',${v})">${v}</button>`).join('')}</div>
+   <div class="encEnds"><span>${q.a} = ${q.lo}</span><span>${q.b} = ${q.hi}</span></div></fieldset>`).join('')}
+  <label for="encC">Comentario (opcional)</label><textarea id="encC" rows="2" maxlength="300"></textarea>
+  <p class="err" id="encErr" role="alert"></p>
+  <div class="encAct"><button class="btn" onclick="encEnviar()">Enviar</button><button class="btn o" onclick="encCerrar()">Omitir por ahora</button></div>
+ </div></div>`;
+ document.body.style.overflow='hidden';document.addEventListener('keydown',encKey);$('#encBox').focus()}
+function encSet(k,v){E[k]=v;document.querySelectorAll(`#enc [data-k="${k}"]`).forEach(b=>{const on=+b.dataset.v==v;b.classList.toggle('on',on);b.setAttribute('aria-checked',on)});$('#encErr').textContent=''}
+function encEnviar(){
+ const f=PREG.filter(q=>E[q.k]===null).map(q=>q.n);
+ if(f.length){$('#encErr').textContent='Falta responder: '+f.join(', ');return}
+ const r={fecha:new Date().toISOString(),usuario:S.user,ces:E.ces,nps:E.nps,csat:E.csat,comentario:$('#encC').value.trim()};
+ try{const a=JSON.parse(localStorage.getItem('crp_encuestas')||'[]');a.push(r);localStorage.setItem('crp_encuestas',JSON.stringify(a))}catch(_){}
+ const cat=E.nps>=9?'promotor':E.nps>=7?'pasivo':'detractor';
+ $('#encBox').innerHTML=`<h2>¡Gracias, ${S.user}!</h2><p style="color:var(--mut)">Tu respuesta nos ayuda a mejorar la atención.</p><p style="font-size:14px">CES ${E.ces}/5 · NPS ${E.nps}/10 (${cat}) · CSAT ${E.csat}/5</p><button class="btn" onclick="encCerrar()">Cerrar</button>`;
+ $('#encBox').focus()}
+function encCerrar(){$('#enc').innerHTML='';document.body.style.overflow='';document.removeEventListener('keydown',encKey);if(encPrev&&encPrev.focus)encPrev.focus()}
+function encKey(e){
+ if(e.key=='Escape'){encCerrar();return}
+ if(e.key!='Tab')return;
+ const f=[...document.querySelectorAll('#enc button,#enc textarea')],a=f[0],z=f[f.length-1],x=document.activeElement;
+ if(e.shiftKey&&(x==a||x==$('#encBox'))){e.preventDefault();z.focus()}
+ else if(!e.shiftKey&&x==z){e.preventDefault();a.focus()}}
 // Home
 function home(){$('#nx').innerHTML=nextFree('Medicina General',3).map(x=>`<button class="chip" onclick="S.sel={...S.sel,tipo:'prog',esp:'Medicina General',dia:${x.i},hora:'${x.h}'};S.stage='form';pedir()">${dl(x.i)} ${x.h}</button>`).join('');
  $('#svc').innerHTML=['Medicina General','Cardiología','Pediatría','Ginecología','Traumatología','Laboratorio'].map(e=>`<div class="row"><div><h3>${e}</h3><small>${nextFree(e,1).map(x=>'Próximo cupo: '+dl(x.i)+' '+x.h).join('')}</small></div><span class="pr">Consulta desde S/ ${ESP[e]}</span><button class="btn" onclick="S.sel.esp='${e}';S.sel.tipo='prog';S.sel.hora=null;S.stage='form';pedir()">Reservar ahora</button></div>`).join('')}
